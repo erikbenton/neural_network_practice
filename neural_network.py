@@ -11,8 +11,6 @@ class Network:
         self.weights = [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
         return
 
-
-
     def feed_forward(self, a):
         for b, w in zip(self.biases, self.weights):
             a = sigmoid(np.dot(w*a + b))
@@ -38,14 +36,14 @@ class Network:
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         for x, y in mini_batch:
-            delta_nabla_b, delta_nabla_w = self.backprop(x, y)
+            delta_nabla_b, delta_nabla_w = self.backwards_propagation(x, y)
             nabla_b = [nb + dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw + dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
         self.biases = [b - (learning_rate/len(mini_batch)) * nb for b, nb in zip(self.biases, nabla_b)]
         self.weights = [w - (learning_rate / len(mini_batch)) * nw for w, nw in zip(self.weights, nabla_w)]
         return
 
-    def backprop(self, x, y):
+    def backwards_propagation(self, x, y):
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         # feed forward
@@ -69,7 +67,7 @@ class Network:
             delta = np.dot(self.weights[-i+1].transpose(), delta) * sp
             nabla_b[-i] = delta
             nabla_w[-i] = np.dot(delta, activations[i-1].transpose())
-        return (nabla_b, nabla_w)
+        return nabla_b, nabla_w
 
     def evaluate(self, test_data):
         test_results = [(np.argmax(self.feed_forward(x)), y) for (x, y) in test_data]
