@@ -7,13 +7,18 @@ import random
 
 class Network:
     def __init__(self, sizes):
-        self.num_layers = len(sizes)
-        self.sizes = sizes
-        self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
-        self.weights = [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
+        # Number of neural layers in the network
+        self.num_layers: int = len(sizes)
+        # Number of input neurons
+        self.sizes: int = sizes
+        # Biases and weights for the network
+        # Normal distribution
+        self.biases: list = [np.random.randn(y, 1) for y in sizes[1:]]
+        self.weights: list = [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
         return
 
     def feed_forward(self, a):
+        # Creating a list of the zipped tuples
         zipped_biases_weights = list(zip(self.biases, self.weights))
         for b, w in zipped_biases_weights:
             a = sigmoid(np.dot(w, a) + b)
@@ -77,6 +82,39 @@ class Network:
             nabla_w[-i] = np.dot(delta, activations[-i-1].transpose())
         return nabla_b, nabla_w
 
+    def backwards_propagation_matrix(self, xs, y, n):
+        nabla_b = [np.zeros(b.shape) for b in self.biases]
+        nabla_w = [np.zeros(w.shape) for w in self.weights]
+        activations = [xs]
+        mbatch_activations = [activations]
+        zs = []
+        mbatch_zs = []
+        for b, w in zip(self.biases, self.weights):
+            # Create bias matrix
+            bias_matrix = np.tile(self.biases, (n, 1))
+            # Calculate all mini batch weighted inputs for one layer
+            zs.append(np.add(np.matmul(w, activations), bias_matrix))
+            # Empty activations
+            activations = []
+            # Calculate all the activations
+            for z in zs:
+                activations.append(sigmoid(z))
+            # Save all the activations for that mini batch
+            mbatch_activations.append(activations)
+            mbatch_zs.append(zs)
+        # Backward pass
+        delta = np.multiply(cost_derivative_matrix(mbatch_activations[-1], y),
+                            sigmoid_prime_matrix(np.array(mbatch_zs[-1])))
+        nabla_b[-1] = delta
+        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        for i in range(2, self.num_layers):
+            z = zs[-i]
+            sp = sigmoid_prime(z)
+            delta = np.dot(self.weights[-i+1].transpose(), delta) * sp
+            nabla_b[-i] = delta
+            nabla_w[-i] = np.dot(delta, activations[-i-1].transpose())
+        return nabla_b, nabla_w
+
     def evaluate(self, test_data):
         test_results = [(np.argmax(self.feed_forward(x)), y) for (x, y) in test_data]
         return sum(int(x == y) for (x, y) in test_results)
@@ -86,12 +124,25 @@ def sigmoid(z):
     return 1.0 / (1 + np.exp(-z))
 
 
+def sigmoid_matrix(z):
+    denominator = np.add(np.ones(z.shape), np.exp(-z))
+    return np.divide(np.ones(z.size), denominator)
+
+
 def cost_derivative(output_activations, y):
-    return output_activations - y
+    return np.subtract(output_activations - y)
+
+
+def cost_derivative_matrix(output_activations, y):
+    return np.subtract(output_activations, y)
 
 
 def sigmoid_prime(z):
     return sigmoid(z) * (1 - sigmoid(z))
+
+
+def sigmoid_prime_matrix(z):
+    return np.multiply(sigmoid_matrix(z), np.subtract(np.ones(z.shape), sigmoid_matrix(z)))
 
 
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
