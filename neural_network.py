@@ -130,7 +130,7 @@ def sigmoid_matrix(z):
 
 
 def cost_derivative(output_activations, y):
-    return np.subtract(output_activations - y)
+    return np.subtract(output_activations, y)
 
 
 def cost_derivative_matrix(output_activations, y):
