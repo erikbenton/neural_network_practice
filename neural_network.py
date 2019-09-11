@@ -7,16 +7,36 @@ import json
 import sys
 
 
+class CrossEntropyCost:
+    @staticmethod
+    def fn(a, y):
+        return np.sum(np.nan_to_num(-y*np.log(a) - (1 - y)*np.log(1 - a)))
+
+    @staticmethod
+    def delta(z, a, y):
+        return a - y
+
+
+class QuadraticCost:
+    @staticmethod
+    def fn(a, y):
+        return 0.5 * np.linalg.norm(a - y)**2
+
+    @staticmethod
+    def delta(z, a, y):
+        return (a - y) * sigmoid_prime(z)
+
+
 class Network:
-    def __init__(self, sizes, cost=CostEntropyCost):
+    def __init__(self, sizes, cost=CrossEntropyCost):
         # Number of neural layers in the network
         self.num_layers: int = len(sizes)
         # Number of input neurons
         self.sizes: int = sizes
-        self.default_weight_initializer()
         self.biases: list = []
         self.weights: list = []
-        self.cost: function = cost
+        self.default_weight_initializer()
+        self.cost = cost
         return
 
     def default_weight_initializer(self):
@@ -25,7 +45,7 @@ class Network:
         self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
         # Initializes the weights as a Gaussian distribution
         # with a mean of 0 and an SD == 1/sqrt(num_weights_to_same_neuron)
-        self.weights = [np.random.randn(y, x)/np.sqrt(x) for x, y in (self.sizes[:-1], self.size[1:])]
+        self.weights = [np.random.randn(y, x)/np.sqrt(x) for x, y in (self.sizes[:-1], self.sizes[1:])]
         return
 
     def large_weight_initializer(self):
@@ -34,7 +54,7 @@ class Network:
         self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
         # Initializes the weights as a Gaussian distribution
         # with a mean of 0 and an SD == 1
-        self.weights = [np.random.randn(y, x) for x, y in (self.sizes[:-1], self.size[1:])]
+        self.weights = [np.random.randn(y, x) for x, y in (self.sizes[:-1], self.sizes[1:])]
         return
 
     def feed_forward(self, a):
@@ -92,7 +112,7 @@ class Network:
             nabla_w = [nw + dnw for nw, dnw in zipped_nablas_w]
         zipped_biases_nabla_b = list(zip(self.biases, nabla_b))
         zipped_weights_nabla_w = list(zip(self.weights, nabla_w))
-        self.weights = [(1-learning_rate*(lmda/n))*w - (learning_rate/len(mini_batch))*nw
+        self.weights = [(1-learning_rate*(lmbda/n))*w - (learning_rate/len(mini_batch))*nw
                         for w, nw in zipped_weights_nabla_w]
         self.biases = [b - (learning_rate/len(mini_batch))*nb
                        for b, nb in zipped_biases_nabla_b]
@@ -114,7 +134,7 @@ class Network:
             activation = sigmoid(z)
             activations.append(activation)
         # Backward pass
-        delta = self.cost.delta(zs[-1], activations[-1], y)
+        delta = (self.cost).delta(zs[-1], activations[-1], y)
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         for i in range(2, self.num_layers):
@@ -163,10 +183,10 @@ class Network:
         # Neural Network's output is assumed to be the index of the whichever neuron in the final layer
         # has the highest activation
         if convert:
-            results = [np.argmax(self.feed_forward(x)), np.argmax(y) for x, y in data]
+            results = [(np.argmax(self.feed_forward(x)), np.argmax(y)) for x, y in data]
         else:
-            results = [np.argmax(self.feed_forward(x)), y for x, y in data]
-        return sum(int(x==y) for x, y in results)
+            results = [(np.argmax(self.feed_forward(x)), y) for x, y in data]
+        return sum(int(x == y) for x, y in results)
 
     def total_cost(self, data, lmbda, convert=False):
         # Returns the total cost for the data set
@@ -193,26 +213,6 @@ class Network:
     def evaluate(self, test_data):
         test_results = [(np.argmax(self.feed_forward(x)), y) for (x, y) in test_data]
         return sum(int(x == y) for (x, y) in test_results)
-
-
-class CrossEntropyCost:
-    @staticmethod
-    def fn(a, y):
-        return np.sum(np.nan_to_num(-y*np.log(a) - (1 - y)*np.log(1 - a)))
-
-    @staticmethod
-    def delta(z, a, y):
-        return a - y
-
-
-class QuadraticCost:
-    @staticmethod
-    def fn(a, y):
-        return 0.5 * np.linalg.norm(a - y)**2
-
-    @staticmethod
-    def delta(z, a, y):
-        return (a - y) * sigmoid_prime(z)
 
 
 def load(filename):
@@ -259,4 +259,10 @@ def sigmoid_prime_matrix(z):
 
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 net = Network([784, 30, 10])
-net.sgd(training_data, 30, 10, 3.0, test_data=test_data)
+net.sgd(training_data, 30, 10, 0.5,
+        lmbda=5.0,
+        evaluation_data=validation_data,
+        monitor_evaluation_accuracy=True,
+        monitor_evaluation_cost=True,
+        monitor_training_accuracy=True,
+        monitor_training_cost=True)
