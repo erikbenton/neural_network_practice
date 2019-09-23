@@ -226,11 +226,13 @@ def load(filename):
     net.biases = [np.array(b) for b in data["biases"]]
     return net
 
+
 def vectorized_result(j):
     # Gives a 10 dim unit vector with 1 in the jth place and zeros elsewhere
     e = np.zeros((10, 1))
     e[j] = 1.0
     return e
+
 
 def sigmoid(z):
     return 1.0 / (1 + np.exp(-z))
