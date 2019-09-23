@@ -24,7 +24,7 @@ class QuadraticCost:
 
     @staticmethod
     def delta(z, a, y):
-        return (a - y) * sigmoid_prime(z)
+        return np.subtract(a - y) * sigmoid_prime(z)
 
 
 class Network:
@@ -80,7 +80,7 @@ class Network:
             random.shuffle(training_data)
             mini_batches = [training_data[k:k+mini_batch_size] for k in range(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
-                self.update_mini_batch(mini_batch, learning_rate, lmbda, len(training_data))
+                self.update_mini_batch_matrix(mini_batch, learning_rate, lmbda, len(training_data))
             print("Epoch {0} training complete".format(j))
             if monitor_training_cost:
                 cost = self.total_cost(training_data, lmbda)
@@ -104,6 +104,7 @@ class Network:
         # nabla - the upside-down greek Delta
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        xs = np.array([x[0] for x in mini_batch])
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backwards_propagation(x, y)
             zipped_nablas_b = list(zip(nabla_b, delta_nabla_b))
@@ -129,7 +130,10 @@ class Network:
         zs = []
         zipped_biases_weights = list(zip(self.biases, self.weights))
         for b, w in zip(self.biases, self.weights):
+            fun = np.tile(w, (1, 1, 10))
             z = np.dot(w, activation) + b
+            fun = np.array(w)
+            fun = np.tile(fun, (1, 10))
             zs.append(z)
             activation = sigmoid(z)
             activations.append(activation)
@@ -145,37 +149,53 @@ class Network:
             nabla_w[-i] = np.dot(delta, activations[-i-1].transpose())
         return nabla_b, nabla_w
 
-    def backwards_propagation_matrix(self, xs, y, n):
+    def update_mini_batch_matrix(self, mini_batch, learning_rate, lmbda, n):
+        # nabla - the upside-down greek Delta
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        xs = np.array([x[0] for x in mini_batch])
+        ys = np.array([y[1] for y in mini_batch])
+        delta_nabla_b, delta_nabla_w = self.backwards_propagation_matrix(xs, ys)
+        for x, y in mini_batch:
+            delta_nabla_b, delta_nabla_w = self.backwards_propagation(x, y)
+            zipped_nablas_b = list(zip(nabla_b, delta_nabla_b))
+            zipped_nablas_w = list(zip(nabla_w, delta_nabla_w))
+            nabla_b = [nb + dnb for nb, dnb in zipped_nablas_b]
+            nabla_w = [nw + dnw for nw, dnw in zipped_nablas_w]
+        zipped_biases_nabla_b = list(zip(self.biases, nabla_b))
+        zipped_weights_nabla_w = list(zip(self.weights, nabla_w))
+        self.weights = [(1-learning_rate*(lmbda/n))*w - (learning_rate/len(mini_batch))*nw
+                        for w, nw in zipped_weights_nabla_w]
+        self.biases = [b - (learning_rate/len(mini_batch))*nb
+                       for b, nb in zipped_biases_nabla_b]
+        return
+
+    def backwards_propagation_matrix(self, xs, ys):
+        nabla_b = [np.zeros(b.shape) for b in self.biases]
+        nabla_w = [np.zeros(w.shape) for w in self.weights]
+        # feed forward
+        activation = xs
+        # Layer by layer list of the activations
         activations = [xs]
-        mbatch_activations = [activations]
+        # Layer by layer list to store all the z vectors
         zs = []
-        mbatch_zs = []
         for b, w in zip(self.biases, self.weights):
-            # Create bias matrix
-            bias_matrix = np.tile(self.biases, (n, 1))
-            # Calculate all mini batch weighted inputs for one layer
-            zs.append(np.add(np.matmul(w, activations), bias_matrix))
-            # Empty activations
-            activations = []
-            # Calculate all the activations
-            for z in zs:
-                activations.append(sigmoid(z))
-            # Save all the activations for that mini batch
-            mbatch_activations.append(activations)
-            mbatch_zs.append(zs)
+            biases = np.tile(b, (1, len(xs)))
+            biases.reshape(len(xs), len(b))
+            z = np.matmul(w, activation) + biases
+            zs.append(z)
+            activation = sigmoid(z)
+            activations.append(activation)
         # Backward pass
-        delta = np.multiply(cost_derivative_matrix(mbatch_activations[-1], y),
-                            sigmoid_prime_matrix(np.array(mbatch_zs[-1])))
+        delta = self.cost.delta(zs[-1], activations[-1], ys)
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         for i in range(2, self.num_layers):
             z = zs[-i]
             sp = sigmoid_prime(z)
-            delta = np.dot(self.weights[-i+1].transpose(), delta) * sp
+            delta = np.dot(self.weights[-i + 1].transpose(), delta) * sp
             nabla_b[-i] = delta
-            nabla_w[-i] = np.dot(delta, activations[-i-1].transpose())
+            nabla_w[-i] = np.dot(delta, activations[-i - 1].transpose())
         return nabla_b, nabla_w
 
     def accuracy(self, data, convert=False):
