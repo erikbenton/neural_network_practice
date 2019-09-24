@@ -6,7 +6,7 @@ import random
 import json
 import sys
 
-
+delta_list = []
 class CrossEntropyCost:
     @staticmethod
     def fn(a, y):
@@ -20,11 +20,11 @@ class CrossEntropyCost:
 class QuadraticCost:
     @staticmethod
     def fn(a, y):
-        return 0.5 * np.linalg.norm(a - y)**2
+        return 0.5 * np.linalg.norm(np.subtract(a, y))**2
 
     @staticmethod
     def delta(z, a, y):
-        return np.subtract(a - y) * sigmoid_prime(z)
+        return np.matmul(np.subtract(a, y), sigmoid_prime(z))
 
 
 class Network:
@@ -104,7 +104,6 @@ class Network:
         # nabla - the upside-down greek Delta
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
-        xs = np.array([x[0] for x in mini_batch])
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backwards_propagation(x, y)
             zipped_nablas_b = list(zip(nabla_b, delta_nabla_b))
@@ -113,6 +112,9 @@ class Network:
             nabla_w = [nw + dnw for nw, dnw in zipped_nablas_w]
         zipped_biases_nabla_b = list(zip(self.biases, nabla_b))
         zipped_weights_nabla_w = list(zip(self.weights, nabla_w))
+        xs = np.array([x for x, y in mini_batch]).reshape(784, 10)
+        ys = np.array([y for x, y in mini_batch]).reshape(10, 10)
+        check_nabla_b, check_nabla_w = self.backwards_propagation_matrix(xs, ys)
         self.weights = [(1-learning_rate*(lmbda/n))*w - (learning_rate/len(mini_batch))*nw
                         for w, nw in zipped_weights_nabla_w]
         self.biases = [b - (learning_rate/len(mini_batch))*nb
@@ -130,10 +132,7 @@ class Network:
         zs = []
         zipped_biases_weights = list(zip(self.biases, self.weights))
         for b, w in zip(self.biases, self.weights):
-            fun = np.tile(w, (1, 1, 10))
             z = np.dot(w, activation) + b
-            fun = np.array(w)
-            fun = np.tile(fun, (1, 10))
             zs.append(z)
             activation = sigmoid(z)
             activations.append(activation)
@@ -146,22 +145,15 @@ class Network:
             sp = sigmoid_prime(z)
             delta = np.dot(self.weights[-i+1].transpose(), delta) * sp
             nabla_b[-i] = delta
+            delta_list.append(delta)
             nabla_w[-i] = np.dot(delta, activations[-i-1].transpose())
         return nabla_b, nabla_w
 
     def update_mini_batch_matrix(self, mini_batch, learning_rate, lmbda, n):
         # nabla - the upside-down greek Delta
-        nabla_b = [np.zeros(b.shape) for b in self.biases]
-        nabla_w = [np.zeros(w.shape) for w in self.weights]
         xs = np.array([x for x, y in mini_batch]).reshape(784, 10)
         ys = np.array([y for x, y in mini_batch]).reshape(10, 10)
-        delta_nabla_b, delta_nabla_w = self.backwards_propagation_matrix(xs, ys)
-        for x, y in mini_batch:
-            delta_nabla_b, delta_nabla_w = self.backwards_propagation(x, y)
-            zipped_nablas_b = list(zip(nabla_b, delta_nabla_b))
-            zipped_nablas_w = list(zip(nabla_w, delta_nabla_w))
-            nabla_b = [nb + dnb for nb, dnb in zipped_nablas_b]
-            nabla_w = [nw + dnw for nw, dnw in zipped_nablas_w]
+        nabla_b, nabla_w = self.backwards_propagation_matrix(xs, ys)
         zipped_biases_nabla_b = list(zip(self.biases, nabla_b))
         zipped_weights_nabla_w = list(zip(self.weights, nabla_w))
         self.weights = [(1-learning_rate*(lmbda/n))*w - (learning_rate/len(mini_batch))*nw
@@ -191,12 +183,15 @@ class Network:
         delta = self.cost.delta(zs[-1], activations[-1], ys)
         nabla_b[-1] = delta
         nabla_w[-1] = np.matmul(delta, activations[-2].transpose())
+        nabla_b[-1] = np.sum(nabla_b[-1], axis=0).reshape(nabla_b[-1].shape[0], 1)
+        # nabla_w[-1] = np.sum(nabla_w[-1], axis=1)
         for i in range(2, self.num_layers):
             z = zs[-i]
             sp = sigmoid_prime(z)
             delta = np.matmul(self.weights[-i + 1].transpose(), delta) * sp
             nabla_b[-i] = delta
             nabla_w[-i] = np.matmul(delta, activations[-i - 1].transpose())
+            nabla_b[-i] = np.sum(nabla_b[-i], axis=1).reshape(nabla_b[-i].shape[0], 1)
         return nabla_b, nabla_w
 
     def accuracy(self, data, convert=False):
