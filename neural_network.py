@@ -14,7 +14,7 @@ class CrossEntropyCost:
 
     @staticmethod
     def delta(z, a, y):
-        return a - y
+        return np.subtract(a, y)
 
 
 class QuadraticCost:
@@ -153,8 +153,8 @@ class Network:
         # nabla - the upside-down greek Delta
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
-        xs = np.array([x[0] for x in mini_batch])
-        ys = np.array([y[1] for y in mini_batch])
+        xs = np.array([x for x, y in mini_batch]).reshape(784, 10)
+        ys = np.array([y for x, y in mini_batch]).reshape(10, 10)
         delta_nabla_b, delta_nabla_w = self.backwards_propagation_matrix(xs, ys)
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backwards_propagation(x, y)
@@ -180,8 +180,9 @@ class Network:
         # Layer by layer list to store all the z vectors
         zs = []
         for b, w in zip(self.biases, self.weights):
-            biases = np.tile(b, (1, len(xs)))
-            biases.reshape(len(xs), len(b))
+            # Make the bias matrix the appropriate size
+            biases = np.tile(b, (1, np.shape(xs)[1]))
+            biases.reshape(np.shape(xs)[1], len(b))
             z = np.matmul(w, activation) + biases
             zs.append(z)
             activation = sigmoid(z)
@@ -189,13 +190,13 @@ class Network:
         # Backward pass
         delta = self.cost.delta(zs[-1], activations[-1], ys)
         nabla_b[-1] = delta
-        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        nabla_w[-1] = np.matmul(delta, activations[-2].transpose())
         for i in range(2, self.num_layers):
             z = zs[-i]
             sp = sigmoid_prime(z)
-            delta = np.dot(self.weights[-i + 1].transpose(), delta) * sp
+            delta = np.matmul(self.weights[-i + 1].transpose(), delta) * sp
             nabla_b[-i] = delta
-            nabla_w[-i] = np.dot(delta, activations[-i - 1].transpose())
+            nabla_w[-i] = np.matmul(delta, activations[-i - 1].transpose())
         return nabla_b, nabla_w
 
     def accuracy(self, data, convert=False):
