@@ -6,7 +6,7 @@ import random
 import json
 import sys
 
-delta_list = []
+
 class CrossEntropyCost:
     @staticmethod
     def fn(a, y):
@@ -14,7 +14,8 @@ class CrossEntropyCost:
 
     @staticmethod
     def delta(z, a, y):
-        return np.subtract(a, y)
+        res = np.subtract(a, y)
+        return res
 
 
 class QuadraticCost:
@@ -104,8 +105,10 @@ class Network:
         # nabla - the upside-down greek Delta
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        delta_nablas = []
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backwards_propagation(x, y)
+            delta_nablas.append((delta_nabla_b, delta_nabla_w))
             zipped_nablas_b = list(zip(nabla_b, delta_nabla_b))
             zipped_nablas_w = list(zip(nabla_w, delta_nabla_w))
             nabla_b = [nb + dnb for nb, dnb in zipped_nablas_b]
@@ -128,31 +131,36 @@ class Network:
         activation = x
         # Layer by layer list of the activations
         activations = [x]
+        activation_list[0].append(activation)
         # Layer by layer list to store all the z vectors
         zs = []
         zipped_biases_weights = list(zip(self.biases, self.weights))
+        i = 1
         for b, w in zip(self.biases, self.weights):
             z = np.dot(w, activation) + b
             zs.append(z)
             activation = sigmoid(z)
+            activation_list[i].append(activation)
+            i += 1
             activations.append(activation)
         # Backward pass
         delta = (self.cost).delta(zs[-1], activations[-1], y)
         nabla_b[-1] = delta
+        delta_list[0].append(delta)
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         for i in range(2, self.num_layers):
             z = zs[-i]
             sp = sigmoid_prime(z)
             delta = np.dot(self.weights[-i+1].transpose(), delta) * sp
             nabla_b[-i] = delta
-            delta_list.append(delta)
+            delta_list[i - 1].append(delta)
             nabla_w[-i] = np.dot(delta, activations[-i-1].transpose())
         return nabla_b, nabla_w
 
     def update_mini_batch_matrix(self, mini_batch, learning_rate, lmbda, n):
         # nabla - the upside-down greek Delta
-        xs = np.array([x for x, y in mini_batch]).reshape(784, 10)
-        ys = np.array([y for x, y in mini_batch]).reshape(10, 10)
+        xs = np.array([x for x, y in mini_batch]).reshape(len(mini_batch), 784).transpose()
+        ys = np.array([y for x, y in mini_batch]).reshape(len(mini_batch), 10).transpose()
         nabla_b, nabla_w = self.backwards_propagation_matrix(xs, ys)
         zipped_biases_nabla_b = list(zip(self.biases, nabla_b))
         zipped_weights_nabla_w = list(zip(self.weights, nabla_w))
@@ -181,17 +189,20 @@ class Network:
             activations.append(activation)
         # Backward pass
         delta = self.cost.delta(zs[-1], activations[-1], ys)
-        nabla_b[-1] = delta
+        compare_delta.append(delta)
+        nabla_b[-1] = np.matmul(delta, np.ones((10, 1)))
         nabla_w[-1] = np.matmul(delta, activations[-2].transpose())
-        nabla_b[-1] = np.sum(nabla_b[-1], axis=0).reshape(nabla_b[-1].shape[0], 1)
+        #nabla_b[-1] = np.sum(nabla_b[-1], axis=0).reshape(nabla_b[-1].shape[0], 1)
         # nabla_w[-1] = np.sum(nabla_w[-1], axis=1)
         for i in range(2, self.num_layers):
             z = zs[-i]
             sp = sigmoid_prime(z)
             delta = np.matmul(self.weights[-i + 1].transpose(), delta) * sp
-            nabla_b[-i] = delta
+            nabla_b[-i] = np.matmul(delta, np.ones((10, 1)))
             nabla_w[-i] = np.matmul(delta, activations[-i - 1].transpose())
-            nabla_b[-i] = np.sum(nabla_b[-i], axis=1).reshape(nabla_b[-i].shape[0], 1)
+            # nabla_b[-i] = np.sum(nabla_b[-i], axis=1).reshape(nabla_b[-i].shape[0], 1)
+        compare_delta.append(delta)
+        compare_activation.append(activations)
         return nabla_b, nabla_w
 
     def accuracy(self, data, convert=False):
@@ -275,6 +286,10 @@ def sigmoid_prime_matrix(z):
     return np.multiply(sigmoid_matrix(z), np.subtract(np.ones(z.shape), sigmoid_matrix(z)))
 
 
+delta_list = [[], [], []]
+compare_delta = []
+compare_activation = []
+activation_list = [[], [], []]
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 net = Network([784, 30, 10])
 net.sgd(training_data, 30, 10, 0.5,
